@@ -1,0 +1,59 @@
+version: '3.2'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.16.2
+    container_name: cw_elasticsearch
+    restart: always
+    environment:
+      - "discovery.type=single-node"
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "xpack.security.enabled=true"
+      - "ELASTIC_PASSWORD=mypass"
+    ports:
+      - 9200:9200
+    volumes:
+      - "./elasticsearch_data:/usr/share/elasticsearch/data"
+      - "./.esbackup:/usr/share/elasticsearch/.esbackup"
+      - "./elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml"
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.16.2
+    container_name: cw_kibana
+    restart: always
+    environment:
+      - "ELASTICSEARCH_URL=http://elasticsearch:9200"
+      - "ELASTICSEARCH_USERNAME=elastic"
+      - "ELASTICSEARCH_PASSWORD=mypass"
+    depends_on:
+      - "elasticsearch"
+    ports:
+      - 5601:5601
+    volumes:
+      - "./kibana_plugins:/usr/share/kibana/plugins"
+      - "./kibana_data:/usr/share/kibana/data"
+  apm:
+    image: docker.elastic.co/apm/apm-server:7.16.2
+    container_name: cw_apm
+    restart: always
+    ports:
+      - 8200:8200
+    volumes:
+      - "./apm-server.yml:/usr/share/apm-server/apm-server.yml"
+    command: >
+       apm-server -e
+         -E apm-server.rum.enabled=true
+         -E apm-server.kibana.enabled=true
+         -E apm-server.kibana.host=kibana:5601
+         -E apm-server.kibana.username=elastic
+         -E apm-server.kibana.password=mypass
+         -E output.elasticsearch.hosts=["elasticsearch:9200"]
+         -E output.elasticsearch.username=elastic
+         -E output.elasticsearch.password=mypass
+    depends_on:
+      - "elasticsearch"
+      - "kibana"
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "5"
+        max-size: "10m"
